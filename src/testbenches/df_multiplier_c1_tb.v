@@ -1,50 +1,60 @@
-// License
-
 `timescale 1ns / 1ns
 
 module df_multiplier_c1_tb;
 	
-	integer i;	
+	integer i, j;
+	integer exact_val, approx_val, error_dist;
+	integer total_error = 0;
 	
 	reg [1:0] coef;
 	reg [7:0] data;
 	wire [7:0] out;
 	
 	wire [7:0] c;
-	wire [15:0] mul;
+	wire [15:0] mul_exact;
+	wire [7:0] out_exact;
 	
+	// Instantiate the Approximate Multiplier
 	df_multiplier_c1 df_multiplier_c1_dut(coef, data, out);
 	
+	// Calculate exact expected value for baseline comparison
 	assign c = {coef, 6'b100000};
-	
-	assign mul = data * c;
+	assign mul_exact = data * c;
+	assign out_exact = mul_exact[15:8]; // Truncate exactly like the hardware
 	
 	initial begin
 		$dumpfile("df_multiplier_c1_tb.vcd");
 		$dumpvars;
-		for (i = 0; i <= 2; i = i + 1) begin
-			$dumpvars(0, df_multiplier_c1_dut.stage1[i]);
-		end
-		for (i = 0; i <= 1; i = i + 1) begin
-			$dumpvars(0, df_multiplier_c1_dut.stage2[i]);
-		end
 		
-		data = 8'hff;
+		$display("Running Approximate Multiplier C1 Test...");
+		$display("Coef | Data | Exact Out | Approx Out | Error");
+		$display("-------------------------------------------------");
 		
 		for (i = 0; i <= 3; i = i + 1) begin
-			coef = i;
-			#5;
+			for (j = 0; j <= 255; j = j + 1) begin
+				coef = i[1:0];
+				data = j[7:0];
+				#5;
+				
+				exact_val = out_exact;
+				approx_val = out;
+				
+				// Calculate absolute error distance
+				if (exact_val > approx_val)
+					error_dist = exact_val - approx_val;
+				else
+					error_dist = approx_val - exact_val;
+					
+				total_error = total_error + error_dist;
+				
+				// Print a sample of the errors to avoid flooding the console
+				if (error_dist > 0 && j % 16 == 0)
+					$display("  %b  |  %3d |    %3d    |     %3d    |   %d", coef, data, exact_val, approx_val, error_dist);
+			end
 		end
-		#5 $finish;
 		
-		//coef = 2'b00;
-		//data = 8'hff;
-		//#5;
-		//coef = 2'b01;
-		//#5;
-		//coef = 2'b10;
-		//#5;
-		//coef = 2'b11;
-		//#5 $finish;
+		$display("-------------------------------------------------");
+		$display("Mean Error Distance (MED) for Multiplier C1: %f", total_error / 1024.0);
+		$finish;
 	end
 endmodule

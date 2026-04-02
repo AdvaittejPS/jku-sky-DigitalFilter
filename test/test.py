@@ -5,10 +5,9 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles
 
-
 @cocotb.test()
 async def test_project(dut):
-    dut._log.info("Start")
+    dut._log.info("Start AI MAC Test")
 
     # Set the clock period to 10 us (100 KHz)
     clock = Clock(dut.clk, 10, unit="us")
@@ -23,18 +22,19 @@ async def test_project(dut):
     await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
 
-    dut._log.info("Test project behavior")
+    dut._log.info("Test event-driven behavior")
 
-    # Set the input values you want to test
-    dut.ui_in.value = 0
-    dut.uio_in.value = 0
-
-    # Wait for one clock cycle to see the output values
+    # 1. Send a non-zero event (e.g., 255)
+    dut.ui_in.value = 255
     await ClockCycles(dut.clk, 1)
 
-    # The following assersion is just an example of how to check the output values.
-    # Change it to match the actual expected output of your module:
-    assert dut.uo_out.value == 0
+    # 2. Send zeros (Sparsity). The pipeline should freeze.
+    dut.ui_in.value = 0
+    await ClockCycles(dut.clk, 5)
 
-    # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
+    # Because the pipeline takes a few clock cycles to propagate,
+    # and we froze it before the 255 could reach the end, the output 
+    # should remain exactly what it was (0) during the freeze.
+    assert dut.uo_out.value == 0
+    
+    dut._log.info("Sparsity freeze successful. Pipeline held state.")

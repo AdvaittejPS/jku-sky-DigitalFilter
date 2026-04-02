@@ -1,16 +1,5 @@
-// Copyright 2025 Gregor Flachs
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE−2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2026
+// Event-Driven Approximate Digital Filter / MAC Unit
 
 `include "df_multiplier_c1.v"
 `include "df_multiplier_c2.v"
@@ -54,6 +43,10 @@ module df_digital_filter
 	wire [8:0] radd2;
 	wire [7:0] radd3;
 	
+    // EVENT DETECTION: High if any bit in datain is 1
+	wire event_valid;
+	assign event_valid = |datain; 
+	
 	df_multiplier_c1 mul1(coef1, val1, rmul1);
 	df_multiplier_c2 mul2(coef2, val2, rmul2);
 	df_multiplier_c3 mul3(val3, rmul3);
@@ -76,15 +69,20 @@ module df_digital_filter
 			wg <= 2'b0;
 			res <= 8'b0;
 		end else begin
-			val4 <= val3;
-			val3 <= val2;
-			val2 <= val1;
-			val1 <= datain;
+            // Configuration updates independently of data events
 			if (enconfig == 1'b1) begin
 				hp <= configin[2];
 				wg <= configin[1:0];
 			end
-			res <= radd3;
+            
+            // SPARSITY GATING: Pipeline only shifts when an event occurs
+			if (event_valid) begin
+				val4 <= val3;
+				val3 <= val2;
+				val2 <= val1;
+				val1 <= datain;
+				res <= radd3;
+			end
 		end
 	end
 	

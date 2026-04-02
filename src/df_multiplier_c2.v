@@ -1,19 +1,9 @@
-// Copyright 2025 Gregor Flachs
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE−2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2026
+// Approximate Multiplier C2 for DNN MAC Unit
 
 `include "df_halfadder.v"
 `include "df_fulladder.v"
+`include "df_approx_fulladder.v"
 
 module df_multiplier_c2
 	(
@@ -76,11 +66,18 @@ module df_multiplier_c2
 	
 	assign result[1] = stage4[0][1];
 	df_halfadder resv2(stage4[0][2], stage4[1][2], result[2], carrys[3]);
+	
 	generate
-	for (i = 3; i <= 12; i = i + 1) begin : genres
-		df_fulladder resf(stage4[0][i], stage4[1][i], carrys[i], result[i], carrys[i+1]);
+	// APPROXIMATE STAGE: Lower significance bits (3-6)
+	for (i = 3; i <= 6; i = i + 1) begin : genres_approx
+		df_approx_fulladder resf_approx(stage4[0][i], stage4[1][i], carrys[i], result[i], carrys[i+1]);
+	end
+	// EXACT STAGE: Higher significance bits (7-12)
+	for (i = 7; i <= 12; i = i + 1) begin : genres_exact
+		df_fulladder resf_exact(stage4[0][i], stage4[1][i], carrys[i], result[i], carrys[i+1]);
 	end
 	endgenerate
+	
 	df_halfadder resv13(stage4[0][13], carrys[13], result[13], carrys[14]);
 	assign result[14] = carrys[14];
 	

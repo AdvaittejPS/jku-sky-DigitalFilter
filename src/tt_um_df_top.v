@@ -1,16 +1,5 @@
-// Copyright 2025 Gregor Flachs
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE−2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2026
+// Tiny Tapeout Wrapper for Dual-Mode Battery Failure ASIC
 
 `include "df_digital_filter.v"
 
@@ -21,41 +10,56 @@ module tt_um_df_top
     	input  wire [7:0] uio_in,   // IOs: Input path
     	output wire [7:0] uio_out,  // IOs: Output path
     	output wire [7:0] uio_oe,   // IOs: Enable path (active high: 0=input, 1=output)
-    	input  wire       ena,      // always 1 when the design is powered, so you can ignore it
+    	input  wire       ena,      // always 1 when the design is powered
     	input  wire       clk,      // clock
     	input  wire       rst_n     // reset_n - low to reset
 	);
 	
-	wire [7:0] dataout;
-	reg [7:0] sync_ui_in [0:1];
-	reg [3:0] sync_uio_in [0:1];
+	wire trigger_alarm;
 	
+    // Double-flop synchronizers to prevent metastability on asynchronous external inputs
+	reg [7:0] sync_ui_in [0:1];
+	reg       sync_mode_sel [0:1];  // Reduced from 4-bits to 1-bit
+	
+	// Instantiate the updated Digital Filter / Trigger Core
 	df_digital_filter digital_filter_inst(
 		.CLK(clk),
 		.nRST(rst_n),
-		.enconfig(sync_uio_in[1][3]),
-		.configin(sync_uio_in[1][2:0]),
+		.mode_sel(sync_mode_sel[1]),
 		.datain(sync_ui_in[1]),
-		.dataout(dataout)
+		.trigger_alarm(trigger_alarm)
 	);
 	
 	always @(posedge clk or negedge rst_n) begin
 		if (rst_n == 1'b0) begin
 			sync_ui_in[0] <= 8'b0;
 			sync_ui_in[1] <= 8'b0;
-			sync_uio_in[0] <= 4'b0;
-			sync_uio_in[1] <= 4'b0;
+			sync_mode_sel[0] <= 1'b0;
+			sync_mode_sel[1] <= 1'b0;
 		end else begin
 			sync_ui_in[0] <= ui_in;
 			sync_ui_in[1] <= sync_ui_in[0];
-			sync_uio_in[0] <= uio_in[3:0];
-			sync_uio_in[1] <= sync_uio_in[0];
+            
+            // Map the physical uio_in[0] pin to the mode_sel input
+			sync_mode_sel[0] <= uio_in[0];
+			sync_mode_sel[1] <= sync_mode_sel[0];
 		end
 	end
 	
-	assign uo_out = dataout;
+    // ─────────────────────────────────────────────
+    // PHYSICAL PIN MAPPING
+    // ─────────────────────────────────────────────
+    // Map the 1-bit hardware interrupt to the very first output pin (uo_out[0])
+	assign uo_out[0] = trigger_alarm;
+    
+    // Tie the remaining 7 output pins to Ground (0) to prevent floating leakage
+    assign uo_out[7:1] = 7'b0000000;
+	
+    // Bidirectional IOs are unused as outputs, disable them
 	assign uio_out[7:0] = 8'b0;
 	assign uio_oe = 8'b0000_0000;
 	
-	wire _unused = &{uio_in[7:4], ena, 1'b0};
+    // Catch all unused input wires to satisfy the synthesis tool and prevent warnings
+	wire _unused = &{uio_in[7:1], ena, 1'b0};
+
 endmodule
